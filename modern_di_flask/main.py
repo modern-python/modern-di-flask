@@ -45,10 +45,12 @@ def setup_di(app: Flask, container: Container, *, auto_inject: bool = False) -> 
 
 
 def _inject_views(app: Flask) -> None:
-    for scaffold in (app, *app.blueprints.values()):
-        for endpoint, view in list(scaffold.view_functions.items()):
-            if not getattr(view, "__modern_di_injected__", False):
-                scaffold.view_functions[endpoint] = inject(view)  # ty: ignore[invalid-assignment]
+    # Flask registers every dispatched view (app routes and blueprint routes,
+    # the latter under dotted endpoints like "bp.view") in ``app.view_functions``
+    # and always dispatches through it, so wrapping that one registry covers all.
+    for endpoint, view in list(app.view_functions.items()):
+        if not getattr(view, "__modern_di_injected__", False):
+            app.view_functions[endpoint] = inject(view)  # ty: ignore[invalid-assignment]
 
 
 T = typing.TypeVar("T")
