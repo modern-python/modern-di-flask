@@ -26,7 +26,7 @@ def _close_request(_exception: BaseException | None) -> None:
         child.close_sync()
 
 
-def setup_di(app: Flask, container: Container) -> Container:
+def setup_di(app: Flask, container: Container, *, auto_inject: bool = False) -> Container:
     app.extensions[_ROOT_CONTAINER_KEY] = container
     container.add_providers(*_CONNECTION_PROVIDERS)
 
@@ -39,7 +39,16 @@ def setup_di(app: Flask, container: Container) -> Container:
 
     app.before_request(_enter_request)
     app.teardown_appcontext(_close_request)
+    if auto_inject:
+        _inject_views(app)
     return container
+
+
+def _inject_views(app: Flask) -> None:
+    for scaffold in (app, *app.blueprints.values()):
+        for endpoint, view in list(scaffold.view_functions.items()):
+            if not getattr(view, "__modern_di_injected__", False):
+                scaffold.view_functions[endpoint] = inject(view)  # ty: ignore[invalid-assignment]
 
 
 T = typing.TypeVar("T")
