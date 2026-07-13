@@ -41,11 +41,17 @@ themselves). `modern-di-flask` does not do this automatically.
 ## Per-request scope
 
 `_enter_request`, connected to `before_request`, runs once per incoming
-request. It builds one `Scope.REQUEST` child container via
-`container.build_child_container(scope=Scope.REQUEST, context={Request:
-flask.request._get_current_object()})` — unwrapping Flask's request-local
-proxy to the real `Request` object before seeding it as context — and stashes
-the child on `flask.g` under `_CHILD_CONTAINER_ATTR`
+request. It unwraps Flask's request-local proxy to the real `Request` object,
+then derives the child's scope and context via
+`modern_di.integrations.bind(flask_request_provider, connection)` —
+`bind(provider, connection)` returns a `ConnectionMatch(scope=provider.scope,
+context={provider.context_type: connection})`, so this always produces
+`scope=Scope.REQUEST, context={Request: connection}`, the same values the
+code used to hand-write. Flask has no WebSocket counterpart, so there is only
+ever one provider to derive from — `classify_connection` (which dispatches
+across several providers) has nothing to dispatch across here.
+`container.build_child_container(scope=match.scope, context=match.context)`
+builds the child, which is stashed on `flask.g` under `_CHILD_CONTAINER_ATTR`
 (`"modern_di_request_container"`).
 
 `_close_request`, connected to `teardown_appcontext`, reads the child back off
@@ -58,26 +64,27 @@ no-op instead of raising.
 
 ## Resolution
 
-`FromDI(dependency)` returns an inert marker (`_FromDI`, a frozen dataclass
-wrapping a provider or a bare type) — it does nothing on its own. Parameters
-opt into injection by annotating them
-`typing.Annotated[SomeType, FromDI(dependency)]`.
+`FromDI` is `modern_di.integrations.from_di` — its marker factory. Calling
+`FromDI(dependency)` returns an inert `Marker(dependency)` wrapping a
+provider or a bare type; it does nothing on its own. Parameters opt into
+injection by annotating them `typing.Annotated[SomeType, FromDI(dependency)]`.
 
 `inject`:
 
-1. `_parse_inject_params` scans the resolved type hints
+1. `integrations.parse_markers(func)` scans the resolved type hints
    (`typing.get_type_hints(func, include_extras=True)`) for `Annotated`
-   parameters carrying a `_FromDI` marker.
-2. If none are found, the function is returned unchanged — only marked
-   `func.__modern_di_injected__ = True` — and `inject` short-circuits without
+   parameters carrying a `Marker`.
+2. If none are found, the function is returned unchanged — only marked via
+   `integrations.mark_injected(func)` — and `inject` short-circuits without
    building a wrapper at all.
 3. Otherwise `inject` builds a `wrapper`, decorated with `functools.wraps`,
    that reads the current request's child container off `flask.g`
-   (`getattr(g, _CHILD_CONTAINER_ATTR)`), resolves each DI parameter via
-   `child.resolve_dependency(marker.dependency)` — which dispatches to
-   `resolve_provider` when `dependency` is a provider instance and to
-   `resolve` (by type) otherwise — and calls the original function with the
-   resolved dependencies merged into the caller's `args`/`kwargs`.
+   (`getattr(g, _CHILD_CONTAINER_ATTR)`), resolves every marker via
+   `integrations.resolve_markers(child, markers)` — which calls each
+   `Marker.resolve(container)`, itself `container.resolve_dependency(...)`,
+   dispatching to `resolve_provider` when `dependency` is a provider instance
+   and to `resolve` (by type) otherwise — and calls the original function
+   with the resolved dependencies merged into the caller's `args`/`kwargs`.
 
 Unlike the aiogram and Celery integrations, `inject` performs **no signature
 rewrite**. Flask's URL dispatcher calls a view as `view(**url_args)` — it
@@ -89,8 +96,8 @@ introspection and Flask's endpoint-naming.
 ## auto_inject
 
 With `auto_inject=True`, `setup_di` calls `_inject_views(app)`, which iterates
-`app.view_functions` and wraps every entry not already marked
-`__modern_di_injected__` with `inject`. Flask registers **every** dispatched
+`app.view_functions` and wraps every entry `integrations.is_injected` doesn't
+already report as marked with `inject`. Flask registers **every** dispatched
 view — both app-level routes and blueprint routes (the latter under dotted
 endpoints like `"bp.view"`) — in that single `app.view_functions` mapping, and
 always dispatches through it, so wrapping that one registry covers app and
