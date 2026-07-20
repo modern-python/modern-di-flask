@@ -37,9 +37,10 @@ def test_request_builds_and_closes_child(app: Flask) -> None:
         instance = child.resolve_dependency(Deps.resource)
         return {"ok": isinstance(instance, SimpleCreator)}
 
-    setup_di(app, Container(groups=[Deps], validate=True))
-    with app.test_client() as client:
-        assert client.get("/touch").json == {"ok": True}
+    with Container(groups=[Deps], validate=True) as root:
+        setup_di(app, root)
+        with app.test_client() as client:
+            assert client.get("/touch").json == {"ok": True}
     assert teardowns == ["closed"]  # teardown_appcontext closed the child
 
 
@@ -68,7 +69,8 @@ def test_child_closed_when_view_raises(app: Flask) -> None:
         msg = "kaboom"
         raise RuntimeError(msg)
 
-    setup_di(app, Container(groups=[Deps], validate=True))
-    with app.test_client() as client, pytest.raises(RuntimeError, match="kaboom"):
-        client.get("/boom")
+    with Container(groups=[Deps], validate=True) as root:
+        setup_di(app, root)
+        with app.test_client() as client, pytest.raises(RuntimeError, match="kaboom"):
+            client.get("/boom")
     assert teardowns == ["closed"]  # teardown always runs, incl. the error path

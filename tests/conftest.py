@@ -1,3 +1,5 @@
+import typing
+
 import pytest
 from flask import Flask
 from modern_di import Container
@@ -13,5 +15,7 @@ def app() -> Flask:
 
 
 @pytest.fixture
-def container() -> Container:
-    return Container(groups=[Dependencies], validate=True)
+def container() -> typing.Iterator[Container]:
+    # caller owns opening the root container under modern-di 3.x's mandatory-open lifecycle
+    with Container(groups=[Dependencies], validate=True) as container_:
+        yield container_
