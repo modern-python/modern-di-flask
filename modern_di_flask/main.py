@@ -33,6 +33,7 @@ def setup_di(app: Flask, container: Container, *, auto_inject: bool = False) -> 
         connection = flask.request._get_current_object()  # noqa: SLF001  # ty: ignore[unresolved-attribute]
         match = integrations.bind(flask_request_provider, connection)
         child = container.build_child_container(scope=match.scope, context=match.context)
+        child.open()
         setattr(g, _CHILD_CONTAINER_ATTR, child)
 
     app.before_request(_enter_request)

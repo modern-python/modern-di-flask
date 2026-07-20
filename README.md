@@ -57,11 +57,14 @@ def hello(name: str, settings: typing.Annotated[Settings, FromDI(Dependencies.se
     return f"{settings.greeting}, {name}"
 
 
+# open the root container yourself (modern-di 3.x requires it before use), then
 # call setup_di AFTER registering routes — required when using auto_inject
-setup_di(app, Container(groups=[Dependencies], validate=True))
+container = Container(groups=[Dependencies], validate=True)
+container.open()
+setup_di(app, container)
 ```
 
-Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blueprint routes alike) without a per-view `@inject`; because it walks `app.view_functions` at call time, `setup_di` must run after all routes are registered. `flask.Request` is resolvable within DI via the pre-built `flask_request_provider` context provider. Flask has no application-shutdown hook, so root-container teardown is yours to own — call `fetch_di_container(app).close_sync()` at your process-shutdown point.
+Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blueprint routes alike) without a per-view `@inject`; because it walks `app.view_functions` at call time, `setup_di` must run after all routes are registered. `flask.Request` is resolvable within DI via the pre-built `flask_request_provider` context provider. Flask has no application-startup/shutdown hook, so the root container's lifecycle is yours to own end-to-end: call `.open()` (or use `with`) before serving — required under modern-di 3.x's mandatory-open lifecycle — and call `fetch_di_container(app).close_sync()` at your process-shutdown point.
 
 ## API
 

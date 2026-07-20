@@ -30,13 +30,18 @@ returns the root container.
 
 Unlike Celery's worker-process signals or an ASGI app's lifespan events,
 Flask has no application startup/shutdown hook that `setup_di` could attach
-to. The root container passed to `setup_di` is therefore left exactly as the
-caller constructed it — already open — and lives for the entire process
-lifetime of the app. Closing it, and finalizing any `APP`-scoped providers, is
-the caller's own responsibility: call `fetch_di_container(app).close_sync()`
-at whatever point the application actually shuts down (e.g. a CLI teardown
-step, a WSGI server's exit hook, or an `atexit` callback the caller registers
-themselves). `modern-di-flask` does not do this automatically.
+to. `setup_di` does not open the root container — under modern-di 3.x's
+mandatory-open lifecycle, a freshly-constructed container starts unopened, so
+the caller must call `.open()` (or enter it with `with`) before passing it to
+`setup_di` and serving traffic; passing an unopened container means the very
+first request's `before_request` hook raises `ContainerClosedError` when it
+tries to build the per-request child. The root container then lives for the
+entire process lifetime of the app. Closing it, and finalizing any
+`APP`-scoped providers, is likewise the caller's own responsibility: call
+`fetch_di_container(app).close_sync()` at whatever point the application
+actually shuts down (e.g. a CLI teardown step, a WSGI server's exit hook, or
+an `atexit` callback the caller registers themselves). `modern-di-flask` does
+not open or close the root container automatically.
 
 ## Per-request scope
 
@@ -51,7 +56,11 @@ code used to hand-write. Flask has no WebSocket counterpart, so there is only
 ever one provider to derive from — `classify_connection` (which dispatches
 across several providers) has nothing to dispatch across here.
 `container.build_child_container(scope=match.scope, context=match.context)`
-builds the child, which is stashed on `flask.g` under `_CHILD_CONTAINER_ATTR`
+builds the child; `_enter_request` opens it immediately with `child.open()` —
+required under modern-di 3.x's mandatory-open lifecycle, since building and
+closing the child happen in two separate hooks (`before_request` /
+`teardown_appcontext`) with no enclosing `with` block to open it implicitly.
+The opened child is then stashed on `flask.g` under `_CHILD_CONTAINER_ATTR`
 (`"modern_di_request_container"`).
 
 `_close_request`, connected to `teardown_appcontext`, reads the child back off
