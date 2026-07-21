@@ -32,12 +32,18 @@ Unlike Celery's worker-process signals or an ASGI app's lifespan events,
 Flask has no application startup/shutdown hook that `setup_di` could attach
 to. `setup_di` does not open the root container — under modern-di 3.x's
 mandatory-open lifecycle, a freshly-constructed container starts unopened, so
-the caller must call `.open()` (or enter it with `with`) before passing it to
-`setup_di` and serving traffic; passing an unopened container means the very
-first request's `before_request` hook raises `ContainerClosedError` when it
-tries to build the per-request child. The root container then lives for the
-entire process lifetime of the app. Closing it, and finalizing any
-`APP`-scoped providers, is likewise the caller's own responsibility: call
+the caller must call `.open()` (or enter it with `with`) themselves before
+serving traffic. That call must come **after** `setup_di`, not before:
+`setup_di` is what registers `flask_request_provider` on the container via
+`add_providers`, and `open()` is what runs `validate=True`'s checks — opening
+first means validation runs before the `flask.Request` provider exists, so
+any provider with a non-optional `flask.Request` dependency fails validation
+at that point. Passing an unopened container to `setup_di` is harmless by
+itself; it is the very first request's `before_request` hook that raises
+`ContainerClosedError` when it tries to build the per-request child. The
+root container then lives for the entire process lifetime of the app.
+Closing it, and finalizing any `APP`-scoped providers, is likewise the
+caller's own responsibility: call
 `fetch_di_container(app).close_sync()` at whatever point the application
 actually shuts down (e.g. a CLI teardown step, a WSGI server's exit hook, or
 an `atexit` callback the caller registers themselves). `modern-di-flask` does
