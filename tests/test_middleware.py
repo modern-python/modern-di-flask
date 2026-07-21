@@ -1,11 +1,12 @@
 import typing
 
+import flask
 import pytest
 from flask import Flask, g
-from modern_di import Container, Group, Scope, providers
+from modern_di import Container, Group, Scope, exceptions, providers
 
 import modern_di_flask
-from modern_di_flask import fetch_di_container, setup_di
+from modern_di_flask import FromDI, fetch_di_container, inject, setup_di
 from tests.dependencies import SimpleCreator
 
 
@@ -74,3 +75,42 @@ def test_child_closed_when_view_raises(app: Flask) -> None:
         with app.test_client() as client, pytest.raises(RuntimeError, match="kaboom"):
             client.get("/boom")
     assert teardowns == ["closed"]  # teardown always runs, incl. the error path
+
+
+def _needs_request(request: flask.Request) -> str:
+    # non-optional, no default — validate=True only succeeds once
+    # flask_request_provider is registered, i.e. after setup_di has run
+    return request.method
+
+
+class _HardRequestDeps(Group):
+    req_method = providers.Factory(scope=Scope.REQUEST, creator=_needs_request)
+
+
+def test_setup_di_then_open_resolves_hard_request_dependency(app: Flask) -> None:
+    # correct order: setup_di registers flask_request_provider, THEN open()
+    # runs validate=True — the reverse order is the documented defect this
+    # test guards against
+    root = Container(groups=[_HardRequestDeps], validate=True)
+    setup_di(app, root)
+    root.open()
+
+    @app.route("/method")
+    @inject
+    def method_view(req_method: typing.Annotated[str, FromDI(_HardRequestDeps.req_method)]) -> dict[str, str]:
+        return {"method": req_method}
+
+    try:
+        with app.test_client() as client:
+            assert client.get("/method").json == {"method": "GET"}
+    finally:
+        root.close_sync()
+
+
+def test_open_before_setup_di_fails_validation_for_hard_request_dependency() -> None:
+    # documents the contract: opening before setup_di runs validate=True
+    # before flask_request_provider exists, so a non-optional flask.Request
+    # dependency cannot be resolved
+    root = Container(groups=[_HardRequestDeps], validate=True)
+    with pytest.raises(exceptions.ValidationFailedError):
+        root.open()
