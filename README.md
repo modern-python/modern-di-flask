@@ -21,6 +21,8 @@
 
 Full guide: [Flask integration docs](https://modern-di.modern-python.org/integrations/flask/)
 
+Usage example: [examples/](./examples)
+
 ## Installation
 
 ```bash
