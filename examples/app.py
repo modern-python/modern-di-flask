@@ -1,0 +1,43 @@
+# Minimal modern-di + flask example.
+# Run for real:  flask --app examples.app run
+import dataclasses
+import typing
+
+from flask import Flask
+from modern_di import Container, Group, Scope, providers
+
+from modern_di_flask import FromDI, inject, setup_di
+
+
+@dataclasses.dataclass(kw_only=True)
+class Settings:
+    greeting: str = "Hello"
+
+
+@dataclasses.dataclass(kw_only=True)
+class GreetingService:
+    settings: Settings  # auto-injected by type
+
+    def greet(self, name: str) -> str:
+        return f"{self.settings.greeting}, {name}!"
+
+
+class Dependencies(Group):
+    settings = providers.Factory(scope=Scope.APP, creator=Settings)
+    service = providers.Factory(scope=Scope.REQUEST, creator=GreetingService)
+
+
+app = Flask(__name__)
+
+
+@app.route("/greet/<name>")
+@inject
+def greet(name: str, service: typing.Annotated[GreetingService, FromDI(Dependencies.service)]) -> str:
+    return service.greet(name)
+
+
+# setup_di AFTER routes are registered; container.open() AFTER setup_di, which
+# registers flask_request_provider that validate=True checks for at open() time
+container = Container(groups=[Dependencies], validate=True)
+setup_di(app, container)
+container.open()
