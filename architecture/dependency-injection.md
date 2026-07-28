@@ -62,13 +62,13 @@ code used to hand-write. Flask has no WebSocket counterpart, so there is only
 ever one provider to derive from — `classify_connection` (which dispatches
 across several providers) has nothing to dispatch across here.
 `container.build_child_container(scope=match.scope, context=match.context)`
-builds the child; `_enter_request` opens it immediately with `child.open()`.
-As of modern-di 3.1 that call is defensive rather than required — a freshly
-built child is already open — but it is kept explicit because building and
-closing the child happen in two separate hooks (`before_request` /
-`teardown_appcontext`) with no enclosing `with` block, so the pairing is
-easier to follow when both ends are written out.
-The opened child is then stashed on `flask.g` under `_CHILD_CONTAINER_ATTR`
+builds the child, which modern-di 3.1 returns already open — this package
+requires `modern-di>=3.1` precisely so `_enter_request` can rely on that and
+skip an `open()` call that would only re-acquire the container's lock on every
+request. Nothing reopens the child mid-request: `close_sync()` is called once,
+from `teardown_appcontext`, so there is no span to re-enter (unlike adapters
+that close a child per `@inject` frame and must revive it for the next one).
+The child is then stashed on `flask.g` under `_CHILD_CONTAINER_ATTR`
 (`"modern_di_request_container"`).
 
 `_close_request`, connected to `teardown_appcontext`, reads the child back off
