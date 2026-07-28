@@ -60,14 +60,13 @@ def hello(name: str, settings: typing.Annotated[Settings, FromDI(Dependencies.se
 
 
 # call setup_di AFTER registering routes (required when using auto_inject) —
-# it registers the flask_request_provider that validate=True checks for, so
-# open the root container yourself only after setup_di, before serving
-container = Container(groups=[Dependencies], validate=True)
+# it registers flask_request_provider, so validate after it rather than before
+container = Container(groups=[Dependencies])
 setup_di(app, container)
-container.open()
+container.validate()  # optional fail-fast; flask_request_provider is registered by now
 ```
 
-Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blueprint routes alike) without a per-view `@inject`; because it walks `app.view_functions` at call time, `setup_di` must run after all routes are registered. `flask.Request` is resolvable within DI via the pre-built `flask_request_provider` context provider. Flask has no application-startup/shutdown hook, so the root container's lifecycle is yours to own end-to-end: call `.open()` **after** `setup_di` (which registers `flask_request_provider`) and before serving — required under modern-di 3.x's mandatory-open lifecycle, since `validate=True` runs at `open()` time and needs that provider already registered — and call `fetch_di_container(app).close_sync()` at your process-shutdown point.
+Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blueprint routes alike) without a per-view `@inject`; because it walks `app.view_functions` at call time, `setup_di` must run after all routes are registered. `flask.Request` is resolvable within DI via the pre-built `flask_request_provider` context provider. Flask has no application-startup/shutdown hook, so the root container's shutdown is yours to own. As of modern-di 3.1 a container is **open from construction**, so no `.open()` call is needed before serving. Validation is explicit in 3.1: if you want boot-time fail-fast, call `.validate()` **after** `setup_di` (which registers `flask_request_provider`) — validating first would fail any provider with a non-optional `flask.Request` dependency, because that provider does not exist yet. Call `fetch_di_container(app).close_sync()` at your process-shutdown point; that half is still yours, since Flask has no shutdown hook to attach to.
 
 ## API
 
