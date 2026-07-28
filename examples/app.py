@@ -36,8 +36,8 @@ def greet(name: str, service: typing.Annotated[GreetingService, FromDI(Dependenc
     return service.greet(name)
 
 
-# setup_di AFTER routes are registered; container.open() AFTER setup_di, which
-# registers flask_request_provider that validate=True checks for at open() time
-container = Container(groups=[Dependencies], validate=True)
+# setup_di AFTER routes are registered; validate() AFTER setup_di, which
+# registers the flask_request_provider that validation needs to already exist
+container = Container(groups=[Dependencies])
 setup_di(app, container)
-container.open()
+container.validate()  # optional fail-fast, now that flask_request_provider is registered

@@ -30,14 +30,14 @@ returns the root container.
 
 Unlike Celery's worker-process signals or an ASGI app's lifespan events,
 Flask has no application startup/shutdown hook that `setup_di` could attach
-to. `setup_di` does not open the root container — under modern-di 3.x's
-mandatory-open lifecycle, a freshly-constructed container starts unopened, so
-the caller must call `.open()` (or enter it with `with`) themselves before
-serving traffic. That call must come **after** `setup_di`, not before:
-`setup_di` is what registers `flask_request_provider` on the container via
-`add_providers`, and `open()` is what runs `validate=True`'s checks — opening
-first means validation runs before the `flask.Request` provider exists, so
-any provider with a non-optional `flask.Request` dependency fails validation
+to. `setup_di` does not open the root container, and as of modern-di 3.1 it does
+not need to: a container is open from construction. What the caller still owns
+is the *close*, and — if they want boot-time fail-fast — an explicit
+`container.validate()`, because 3.1 validates nowhere implicitly. That call
+must come **after** `setup_di`, not before: `setup_di` is what registers
+`flask_request_provider` on the container via `add_providers`, so validating
+first runs before the `flask.Request` provider exists, and any provider with a
+non-optional `flask.Request` dependency fails validation
 at that point. Passing an unopened container to `setup_di` is harmless by
 itself; it is the very first request's `before_request` hook that raises
 `ContainerClosedError` when it tries to build the per-request child. The
@@ -62,10 +62,12 @@ code used to hand-write. Flask has no WebSocket counterpart, so there is only
 ever one provider to derive from — `classify_connection` (which dispatches
 across several providers) has nothing to dispatch across here.
 `container.build_child_container(scope=match.scope, context=match.context)`
-builds the child; `_enter_request` opens it immediately with `child.open()` —
-required under modern-di 3.x's mandatory-open lifecycle, since building and
+builds the child; `_enter_request` opens it immediately with `child.open()`.
+As of modern-di 3.1 that call is defensive rather than required — a freshly
+built child is already open — but it is kept explicit because building and
 closing the child happen in two separate hooks (`before_request` /
-`teardown_appcontext`) with no enclosing `with` block to open it implicitly.
+`teardown_appcontext`) with no enclosing `with` block, so the pairing is
+easier to follow when both ends are written out.
 The opened child is then stashed on `flask.g` under `_CHILD_CONTAINER_ATTR`
 (`"modern_di_request_container"`).
 

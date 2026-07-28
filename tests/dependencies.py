@@ -15,7 +15,7 @@ class DependentCreator:
 
 
 def fetch_request_path(request: flask.Request | None = None) -> str:
-    # Optional-with-default so construction-time validate=True treats the request
+    # Optional-with-default so an explicit container.validate() treats the request
     # as optional (the provider is only registered by setup_di); the real request
     # still injects at runtime.
     return request.path if request else ""

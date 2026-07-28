@@ -38,7 +38,7 @@ def test_request_builds_and_closes_child(app: Flask) -> None:
         instance = child.resolve_dependency(Deps.resource)
         return {"ok": isinstance(instance, SimpleCreator)}
 
-    with Container(groups=[Deps], validate=True) as root:
+    with Container(groups=[Deps]) as root:
         setup_di(app, root)
         with app.test_client() as client:
             assert client.get("/touch").json == {"ok": True}
@@ -70,7 +70,7 @@ def test_child_closed_when_view_raises(app: Flask) -> None:
         msg = "kaboom"
         raise RuntimeError(msg)
 
-    with Container(groups=[Deps], validate=True) as root:
+    with Container(groups=[Deps]) as root:
         setup_di(app, root)
         with app.test_client() as client, pytest.raises(RuntimeError, match="kaboom"):
             client.get("/boom")
@@ -78,7 +78,7 @@ def test_child_closed_when_view_raises(app: Flask) -> None:
 
 
 def _needs_request(request: flask.Request) -> str:
-    # non-optional, no default — validate=True only succeeds once
+    # non-optional, no default — validate() only succeeds once
     # flask_request_provider is registered, i.e. after setup_di has run
     return request.method
 
@@ -87,13 +87,13 @@ class _HardRequestDeps(Group):
     req_method = providers.Factory(scope=Scope.REQUEST, creator=_needs_request)
 
 
-def test_setup_di_then_open_resolves_hard_request_dependency(app: Flask) -> None:
-    # correct order: setup_di registers flask_request_provider, THEN open()
-    # runs validate=True — the reverse order is the documented defect this
+def test_setup_di_then_validate_resolves_hard_request_dependency(app: Flask) -> None:
+    # correct order: setup_di registers flask_request_provider, THEN
+    # validate() — the reverse order is the documented defect the sibling
     # test guards against
-    root = Container(groups=[_HardRequestDeps], validate=True)
+    root = Container(groups=[_HardRequestDeps])
     setup_di(app, root)
-    root.open()
+    root.validate()
 
     @app.route("/method")
     @inject
@@ -107,10 +107,11 @@ def test_setup_di_then_open_resolves_hard_request_dependency(app: Flask) -> None
         root.close_sync()
 
 
-def test_open_before_setup_di_fails_validation_for_hard_request_dependency() -> None:
-    # documents the contract: opening before setup_di runs validate=True
-    # before flask_request_provider exists, so a non-optional flask.Request
-    # dependency cannot be resolved
-    root = Container(groups=[_HardRequestDeps], validate=True)
+def test_validate_before_setup_di_fails_for_hard_request_dependency() -> None:
+    # documents the contract: validating before setup_di runs before
+    # flask_request_provider exists, so a non-optional flask.Request
+    # dependency cannot be resolved. modern-di 3.1 validates nowhere
+    # implicitly, so the ordering rule now binds validate(), not open().
+    root = Container(groups=[_HardRequestDeps])
     with pytest.raises(exceptions.ValidationFailedError):
-        root.open()
+        root.validate()
