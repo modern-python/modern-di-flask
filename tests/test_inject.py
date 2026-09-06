@@ -35,6 +35,34 @@ def test_inject_resolves_app_request_and_context(app: Flask, container: Containe
         }
 
 
+def test_inject_preserves_the_view_name_flask_derives_endpoints_from(app: Flask, container: Container) -> None:
+    """INVARIANT: the wrapper ``inject`` returns keeps the wrapped view's ``__name__``.
+
+    Broken by dropping ``functools.wraps`` from the wrapper, or by returning a wrapper built
+    around a different name. ``@app.route`` defaults a view's endpoint to its ``__name__``, so an
+    anonymous wrapper registers every injected view under one endpoint and the second
+    registration collides -- a failure that only surfaces in an app with two injected views,
+    which a suite that declares one per test never has.
+    """
+
+    @app.route("/first")
+    @inject
+    def first(app_instance: typing.Annotated[SimpleCreator, FromDI(SimpleCreator)]) -> dict[str, str]:
+        return {"who": "first", "dep1": app_instance.dep1}
+
+    @app.route("/second")
+    @inject
+    def second(app_instance: typing.Annotated[SimpleCreator, FromDI(SimpleCreator)]) -> dict[str, str]:
+        return {"who": "second", "dep1": app_instance.dep1}
+
+    assert {"first", "second"} <= set(app.view_functions)
+
+    setup_di(app, container)
+    with app.test_client() as client:
+        assert client.get("/first").json == {"who": "first", "dep1": "original"}
+        assert client.get("/second").json == {"who": "second", "dep1": "original"}
+
+
 def test_inject_is_noop_without_fromdi(app: Flask, container: Container) -> None:
     @app.route("/plain")
     @inject
