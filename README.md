@@ -21,7 +21,7 @@
 
 Full guide: [Flask integration docs](https://modern-di.modern-python.org/integrations/flask/)
 
-Usage example: [examples/](./examples)
+Usage example: [examples/](https://github.com/modern-python/modern-di-flask/tree/main/examples)
 
 ## Installation
 
@@ -80,7 +80,7 @@ Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blu
 
 ## 📦 [PyPI](https://pypi.org/project/modern-di-flask)
 
-## 📝 [License](LICENSE)
+## 📝 [License](https://github.com/modern-python/modern-di-flask/blob/main/LICENSE)
 
 ## Part of `modern-python`
 
