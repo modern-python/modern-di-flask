@@ -74,7 +74,7 @@ Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blu
 |---|---|
 | `setup_di(app, container, *, auto_inject=False)` | Registers the container on `app.extensions`, installs the `before_request`/`teardown_appcontext` pair that builds and closes a per-request `Scope.REQUEST` child, and — if `auto_inject=True` — wraps every currently-registered view with `inject`; returns the container |
 | `FromDI(dependency)` | Inert marker (used with `@inject`) that resolves a provider or type from the per-request child container |
-| `inject(view)` | Decorator for a view function; resolves its `FromDI`-annotated parameters without rewriting the function's signature |
+| `inject(view)` | Decorator for a view function; resolves its `FromDI`-annotated parameters without rewriting the function's signature. Raises `RuntimeError` naming `setup_di` when a request reaches it without `setup_di` called |
 | `fetch_di_container(app)` | Returns the root `Container` stored on `app.extensions` |
 | `flask_request_provider` | `ContextProvider` for `flask.Request` (`REQUEST` scope), auto-registered by type |
 

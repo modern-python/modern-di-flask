@@ -1,5 +1,6 @@
 import typing
 
+import pytest
 from flask import Flask
 from modern_di import Container
 
@@ -72,3 +73,19 @@ def test_inject_is_noop_without_fromdi(app: Flask, container: Container) -> None
     setup_di(app, container)
     with app.test_client() as client:
         assert client.get("/plain").json == {"where": "plain"}
+
+
+def test_inject_without_setup_di_names_the_missing_call(app: Flask, container: Container) -> None:
+    @inject
+    def orphan(app_instance: typing.Annotated[SimpleCreator, FromDI(SimpleCreator)]) -> dict[str, str]:
+        return {"dep1": app_instance.dep1}
+
+    app.add_url_rule("/orphan", view_func=orphan)
+    with app.test_client() as client, pytest.raises(RuntimeError, match=r"setup_di\(app, container\)"):
+        client.get("/orphan")
+
+    wired = Flask("wired")
+    wired.add_url_rule("/orphan", view_func=orphan)
+    setup_di(wired, container)
+    with wired.test_client() as client:
+        assert client.get("/orphan").json == {"dep1": "original"}

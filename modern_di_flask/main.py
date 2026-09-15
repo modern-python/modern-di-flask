@@ -13,10 +13,21 @@ _CONNECTION_PROVIDERS = (flask_request_provider,)
 # constants keep each writer and reader in provable agreement.
 _ROOT_CONTAINER_KEY = "modern_di_container"
 _CHILD_CONTAINER_ATTR = "modern_di_request_container"
+_NO_CHILD_CONTAINER_MSG = (
+    "No modern-di container found for this request. Call setup_di(app, container) "
+    "so requests pass through the modern-di request hooks before using @inject."
+)
 
 
 def fetch_di_container(app: Flask) -> Container:
     return typing.cast(Container, app.extensions[_ROOT_CONTAINER_KEY])
+
+
+def _fetch_child_container() -> Container:
+    try:
+        return typing.cast(Container, getattr(g, _CHILD_CONTAINER_ATTR))
+    except AttributeError:
+        raise RuntimeError(_NO_CHILD_CONTAINER_MSG) from None
 
 
 def _close_request(_exception: BaseException | None) -> None:
@@ -65,8 +76,7 @@ def inject(func: typing.Callable[..., T]) -> typing.Callable[..., T]:
 
     @functools.wraps(func)
     def wrapper(*args: typing.Any, **kwargs: typing.Any) -> T:  # noqa: ANN401
-        child: Container = getattr(g, _CHILD_CONTAINER_ATTR)
-        resolved = integrations.resolve_markers(child, markers)
+        resolved = integrations.resolve_markers(_fetch_child_container(), markers)
         return func(*args, **kwargs, **resolved)
 
     integrations.mark_injected(wrapper)
