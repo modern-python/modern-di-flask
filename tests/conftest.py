@@ -16,6 +16,6 @@ def app() -> Flask:
 
 @pytest.fixture
 def container() -> typing.Iterator[Container]:
-    # caller owns opening the root container under modern-di 3.x's mandatory-open lifecycle
+    # caller owns opening the root container under modern-di's mandatory-open lifecycle
     with Container(groups=[Dependencies]) as container_:
         yield container_
