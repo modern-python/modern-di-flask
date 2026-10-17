@@ -3,7 +3,7 @@ import inspect
 import typing
 
 import flask
-from flask import Flask, Request, g
+from flask import Flask, Request, Response, g
 from modern_di import Container, Scope, integrations, providers
 
 
@@ -15,6 +15,7 @@ _CONNECTION_PROVIDERS = (flask_request_provider,)
 _ROOT_CONTAINER_KEY = "modern_di_container"
 _CHILD_CONTAINER_ATTR = "modern_di_request_container"
 _CHILD_REQUEST_ATTR = "modern_di_request"
+_DEFERRED_CHILD_ATTR = "modern_di_deferred_request_container"
 _NO_CHILD_CONTAINER_MSG = (
     "No modern-di container found for this request. Call setup_di(app, container) "
     "so requests pass through the modern-di request hooks before using @inject."
@@ -53,9 +54,18 @@ def _enter_request() -> None:
     _request_child_container()
 
 
+def _defer_close_to_response(_sender: Flask, response: Response, **_extra: typing.Any) -> None:  # noqa: ANN401
+    child: Container | None = getattr(g, _CHILD_CONTAINER_ATTR, None)
+    if child is None or not response.is_streamed or response.direct_passthrough:
+        child = None
+    else:
+        response.call_on_close(child.close_sync)
+    setattr(g, _DEFERRED_CHILD_ATTR, child)
+
+
 def _close_request(_exception: BaseException | None) -> None:
     child: Container | None = getattr(g, _CHILD_CONTAINER_ATTR, None)
-    if child is not None:
+    if child is not None and child is not getattr(g, _DEFERRED_CHILD_ATTR, None):
         child.close_sync()
 
 
@@ -68,6 +78,7 @@ def setup_di(app: Flask, container: Container, *, auto_inject: bool = False) -> 
     # Flask runs these in reverse, so putting the close first makes it run last.
     funcs = app.teardown_appcontext_funcs
     funcs[:] = [_close_request, *(func for func in funcs if func is not _close_request)]
+    flask.request_finished.connect(_defer_close_to_response, app)
     if auto_inject:
         _inject_views(app)
     return container
