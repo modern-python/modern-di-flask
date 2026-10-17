@@ -22,3 +22,6 @@ class Dependencies(Group):
     app_factory = providers.Factory(creator=SimpleCreator, kwargs={"dep1": "original"})
     request_factory = providers.Factory(scope=Scope.REQUEST, creator=DependentCreator, bound_type=None)
     request_path = providers.Factory(scope=Scope.REQUEST, creator=fetch_request_path)
+    request_cached = providers.Factory(
+        scope=Scope.REQUEST, creator=SimpleCreator, kwargs={"dep1": "cached"}, cache=True, bound_type=None
+    )

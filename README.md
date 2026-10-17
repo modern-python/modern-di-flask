@@ -31,7 +31,7 @@ uv add modern-di-flask      # or: pip install modern-di-flask
 
 ## Usage
 
-Flask has no dependency-injection system of its own, so `modern-di-flask` pairs an `@inject` decorator with inert `FromDI` markers (there is no `Depends`). `setup_di` installs a `before_request`/`teardown_appcontext` pair that builds a per-request `Scope.REQUEST` child container and closes it once the request finishes. Resolution is sync-only, and the child container is closed with `close_sync()`.
+Flask has no dependency-injection system of its own, so `modern-di-flask` pairs an `@inject` decorator with inert `FromDI` markers (there is no `Depends`). `setup_di` installs a `before_request`/`teardown_appcontext` pair that builds a per-request `Scope.REQUEST` child container and closes it once the request finishes. Resolution is sync, also for `async def` views, and the child container is closed with `close_sync()`.
 
 ```python
 import typing
@@ -66,6 +66,8 @@ container.validate()  # optional fail-fast; must come after setup_di registers i
 
 Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blueprint routes alike) without a per-view `@inject`. It walks `app.view_functions` when `setup_di` runs, so call `setup_di` after all routes are registered. `flask.Request` is resolvable within DI via the pre-built `flask_request_provider` context provider.
 
+`async def` views work with `@inject` and with `auto_inject=True`. Flask runs them through asgiref, so install Flask's async extra (`pip install "flask[async]"`). The markers are resolved from the request's child container before the view is awaited. Teardown is sync: the child container is closed with `close_sync()`, so a `Scope.REQUEST` provider with an async finalizer is not supported and fails when the request ends. APP-scoped async finalizers are unaffected, because you close the root container yourself.
+
 A container is open from construction. To fail fast at boot, call `.validate()` after `setup_di`, which registers `flask_request_provider`. Flask has no shutdown hook, so call `fetch_di_container(app).close_sync()` at process shutdown.
 
 ## API
@@ -74,7 +76,7 @@ A container is open from construction. To fail fast at boot, call `.validate()` 
 |---|---|
 | `setup_di(app, container, *, auto_inject=False)` | Registers the container on `app.extensions`, installs the `before_request`/`teardown_appcontext` pair that builds and closes a per-request `Scope.REQUEST` child, and, if `auto_inject=True`, wraps every currently registered view with `inject`; returns the container |
 | `FromDI(dependency)` | Inert marker (used with `@inject`) that resolves a provider or type from the per-request child container |
-| `inject(view)` | Decorator for a view function; resolves its `FromDI`-annotated parameters without rewriting the function's signature. Raises `RuntimeError` naming `setup_di` when a request reaches it without `setup_di` called |
+| `inject(view)` | Decorator for a sync or `async def` view; returns a wrapper of the same kind and resolves its `FromDI`-annotated parameters without rewriting the function's signature. Raises `RuntimeError` naming `setup_di` when a request reaches it without `setup_di` called |
 | `fetch_di_container(app)` | Returns the root `Container` stored on `app.extensions` |
 | `flask_request_provider` | `ContextProvider` for `flask.Request` (`REQUEST` scope), auto-registered by type |
 
