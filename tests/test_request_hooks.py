@@ -114,9 +114,8 @@ def test_request_container_is_not_rebuilt_after_close(app: Flask) -> None:
     assert events == ["finalized"]
 
 
-def test_streamed_response_never_rebuilds_the_request_container(app: Flask) -> None:
+def test_streamed_response_keeps_the_request_container_until_the_response_closes(app: Flask) -> None:
     events: list[str] = []
-    outcomes: list[str] = []
 
     @app.route("/")
     def index() -> Response:
@@ -124,18 +123,52 @@ def test_streamed_response_never_rebuilds_the_request_container(app: Flask) -> N
 
         def generate() -> typing.Iterator[str]:
             yield "a"
-            try:
-                outcomes.append("same" if _use() is session else "rebuilt")
-            except exceptions.ContainerClosedError:
-                outcomes.append("closed")
+            events.append("same" if _use() is session else "rebuilt")
 
         return Response(stream_with_context(generate()))
 
     with Container(groups=[_make_group(events)]) as root:
         setup_di(app, root)
-        assert app.test_client().get("/").text == "a"
-    # Flask 3.0 keeps the context for the whole stream; 3.1.2+ tears it down before iterating.
-    assert outcomes in (["same"], ["closed"])
+        response = app.test_client().get("/")
+        assert response.text == "a"
+        assert events == ["same"]
+        response.close()
+    assert events == ["same", "finalized"]
+
+
+def test_plain_generator_response_keeps_resolved_dependencies_live(app: Flask) -> None:
+    events: list[str] = []
+
+    @app.route("/")
+    def index() -> Response:
+        _use()
+
+        def generate() -> typing.Iterator[str]:
+            yield "a"
+            events.append("streamed")
+
+        return Response(generate())
+
+    with Container(groups=[_make_group(events)]) as root:
+        setup_di(app, root)
+        response = app.test_client().get("/")
+        assert response.text == "a"
+        assert events == ["streamed"]
+        response.close()
+    assert events == ["streamed", "finalized"]
+
+
+def test_direct_passthrough_response_closes_at_teardown(app: Flask) -> None:
+    events: list[str] = []
+
+    @app.route("/")
+    def index() -> Response:
+        _use()
+        return Response(iter([b"a"]), direct_passthrough=True)
+
+    with Container(groups=[_make_group(events)]) as root:
+        setup_di(app, root)
+        app.test_client().get("/")
     assert events == ["finalized"]
 
 

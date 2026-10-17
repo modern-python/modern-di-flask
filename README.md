@@ -66,6 +66,8 @@ container.validate()  # optional fail-fast; must come after setup_di registers i
 
 Pass `auto_inject=True` to `setup_di` to wire every registered view (app and blueprint routes alike) without a per-view `@inject`. It walks `app.view_functions` when `setup_di` runs, so call `setup_di` after all routes are registered. `flask.Request` is resolvable within DI via the pre-built `flask_request_provider` context provider.
 
+A streamed response (a generator body, with or without `stream_with_context`) keeps the child container open until the response is closed, which a WSGI server does after sending the body. A `stream_with_context` generator can resolve from it, and dependencies resolved in the view stay usable while the body streams. A `direct_passthrough` response, such as one from `send_file`, is not closed through Flask, so its child container closes at teardown as usual.
+
 `async def` views work with `@inject` and with `auto_inject=True`. Flask runs them through asgiref, so install Flask's async extra (`pip install "flask[async]"`). The markers are resolved from the request's child container before the view is awaited. Teardown is sync: the child container is closed with `close_sync()`, so a `Scope.REQUEST` provider with an async finalizer is not supported and fails when the request ends. The same applies to the root container at shutdown: if an APP-scoped provider has an async finalizer, close the root with `asyncio.run(fetch_di_container(app).close_async())` instead of `close_sync()`.
 
 A container is open from construction. To fail fast at boot, call `.validate()` after `setup_di`, which registers `flask_request_provider`. Flask has no shutdown hook, so call `fetch_di_container(app).close_sync()` at process shutdown.

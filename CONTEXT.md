@@ -29,8 +29,9 @@ Flask app context.
 **Child container**:
 The `Scope.REQUEST` container built per request, on first use or in `before_request`, whichever
 comes first, and stashed on `flask.g`; `inject` resolves from it and `teardown_appcontext` closes
-it after every other `teardown_appcontext` handler. Its lifetime is bounded by Flask's
-**app context**, not by Flask's request context: an app context pushed without a request (a CLI
+it after every other `teardown_appcontext` handler. A streamed response defers the close until the
+response is closed. Otherwise its lifetime is bounded by Flask's **app context**, not by Flask's
+request context: an app context pushed without a request (a CLI
 command, a bare `app.app_context()`) fires the same teardown with no child ever built, which is
 why the close is guarded.
 _Avoid_: request context — Flask's own object, which this is not; request scope — `Scope.REQUEST`
