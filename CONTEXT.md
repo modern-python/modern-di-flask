@@ -27,8 +27,9 @@ _Avoid_: app container — reads as Flask's app object, and its lifetime is the 
 Flask app context.
 
 **Child container**:
-The `Scope.REQUEST` container `before_request` builds per request and stashes on `flask.g`;
-`inject` resolves from it and `teardown_appcontext` closes it. Its lifetime is bounded by Flask's
+The `Scope.REQUEST` container built per request, on first use or in `before_request`, whichever
+comes first, and stashed on `flask.g`; `inject` resolves from it and `teardown_appcontext` closes
+it after every other `teardown_appcontext` handler. Its lifetime is bounded by Flask's
 **app context**, not by Flask's request context: an app context pushed without a request (a CLI
 command, a bare `app.app_context()`) fires the same teardown with no child ever built, which is
 why the close is guarded.
