@@ -82,9 +82,10 @@ A container is open from construction. To fail fast at boot, call `.validate()` 
 | `fetch_di_container(app)` | Returns the root `Container` stored on `app.extensions` |
 | `flask_request_provider` | `ContextProvider` for `flask.Request` (`REQUEST` scope), auto-registered by type |
 
-## 📦 [PyPI](https://pypi.org/project/modern-di-flask)
+## Links
 
-## 📝 [License](https://github.com/modern-python/modern-di-flask/blob/main/LICENSE)
+- [PyPI](https://pypi.org/project/modern-di-flask)
+- [License](https://github.com/modern-python/modern-di-flask/blob/main/LICENSE)
 
 ## Part of `modern-python`
 
