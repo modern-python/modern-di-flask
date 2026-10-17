@@ -1,4 +1,5 @@
 import functools
+import inspect
 import typing
 
 import flask
@@ -73,6 +74,16 @@ def inject(func: typing.Callable[..., T]) -> typing.Callable[..., T]:
     if not markers:
         integrations.mark_injected(func)
         return func
+
+    if inspect.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:  # noqa: ANN401
+            resolved = integrations.resolve_markers(_fetch_child_container(), markers)
+            return await func(*args, **kwargs, **resolved)
+
+        integrations.mark_injected(async_wrapper)
+        return typing.cast(typing.Callable[..., T], async_wrapper)
 
     @functools.wraps(func)
     def wrapper(*args: typing.Any, **kwargs: typing.Any) -> T:  # noqa: ANN401
