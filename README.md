@@ -31,7 +31,7 @@ uv add modern-di-flask      # or: pip install modern-di-flask
 
 ## Usage
 
-Flask has no dependency-injection system of its own, so `modern-di-flask` pairs an `@inject` decorator with inert `FromDI` markers (there is no `Depends`). `setup_di` installs a `before_request`/`teardown_appcontext` pair that builds a per-request `Scope.REQUEST` child container and closes it once the request finishes. Resolution is sync, also for `async def` views, and the child container is closed with `close_sync()`.
+Flask has no dependency-injection system of its own, so `modern-di-flask` pairs an `@inject` decorator with inert `FromDI` markers (there is no `Depends`). `setup_di` installs a `before_request`/`teardown_appcontext` pair that builds a per-request `Scope.REQUEST` child container and closes it once the request finishes. The child is also built on first use, so request hooks registered before `setup_di` can use it, and it is closed after every `teardown_appcontext` handler. Resolution is sync, also for `async def` views, and the child container is closed with `close_sync()`.
 
 ```python
 import typing

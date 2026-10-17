@@ -14,6 +14,7 @@ _CONNECTION_PROVIDERS = (flask_request_provider,)
 # constants keep each writer and reader in provable agreement.
 _ROOT_CONTAINER_KEY = "modern_di_container"
 _CHILD_CONTAINER_ATTR = "modern_di_request_container"
+_CHILD_REQUEST_ATTR = "modern_di_request"
 _NO_CHILD_CONTAINER_MSG = (
     "No modern-di container found for this request. Call setup_di(app, container) "
     "so requests pass through the modern-di request hooks before using @inject."
@@ -25,10 +26,31 @@ def fetch_di_container(app: Flask) -> Container:
 
 
 def _fetch_child_container() -> Container:
+    if flask.has_request_context():
+        return _request_child_container()
     try:
         return typing.cast(Container, getattr(g, _CHILD_CONTAINER_ATTR))
     except AttributeError:
         raise RuntimeError(_NO_CHILD_CONTAINER_MSG) from None
+
+
+def _request_child_container() -> Container:
+    connection = flask.request._get_current_object()  # noqa: SLF001  # ty: ignore[unresolved-attribute]
+    if getattr(g, _CHILD_REQUEST_ATTR, None) is connection:
+        return typing.cast(Container, getattr(g, _CHILD_CONTAINER_ATTR))
+    try:
+        container = fetch_di_container(flask.current_app)
+    except KeyError:
+        raise RuntimeError(_NO_CHILD_CONTAINER_MSG) from None
+    match = integrations.bind(flask_request_provider, connection)
+    child = container.build_child_container(scope=match.scope, context=match.context)
+    setattr(g, _CHILD_CONTAINER_ATTR, child)
+    setattr(g, _CHILD_REQUEST_ATTR, connection)
+    return child
+
+
+def _enter_request() -> None:
+    _request_child_container()
 
 
 def _close_request(_exception: BaseException | None) -> None:
@@ -41,14 +63,11 @@ def setup_di(app: Flask, container: Container, *, auto_inject: bool = False) -> 
     app.extensions[_ROOT_CONTAINER_KEY] = container
     container.add_providers(*_CONNECTION_PROVIDERS)
 
-    def _enter_request() -> None:
-        connection = flask.request._get_current_object()  # noqa: SLF001  # ty: ignore[unresolved-attribute]
-        match = integrations.bind(flask_request_provider, connection)
-        child = container.build_child_container(scope=match.scope, context=match.context)
-        setattr(g, _CHILD_CONTAINER_ATTR, child)
-
     app.before_request(_enter_request)
     app.teardown_appcontext(_close_request)
+    # Flask runs these in reverse, so putting the close first makes it run last.
+    funcs = app.teardown_appcontext_funcs
+    funcs[:] = [_close_request, *(func for func in funcs if func is not _close_request)]
     if auto_inject:
         _inject_views(app)
     return container
