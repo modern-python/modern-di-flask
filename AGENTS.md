@@ -7,14 +7,14 @@ repository.
 
 `modern-di-flask` is a Flask adapter over
 [`modern-di`](https://github.com/modern-python/modern-di); [`CONTEXT.md`](CONTEXT.md) opens with
-what it does and owns the vocabulary — read it before naming a concept in code, a test name, or an
+what it does and owns the vocabulary. Read it before naming a concept in code, a test name, or an
 issue title. Flask's own "app context" and "request context" are the easiest things to conflate
 with modern-di's `Scope`; `CONTEXT.md` pins the difference. This is one of that project's
 integrations, each of which lives in a separate repository and ships as a separate PyPI package.
 
 ## Commands
 
-`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth —
+`just` (task runner) and `uv` (package manager). The [`justfile`](justfile) is the source of truth:
 `just --list`, or read it.
 
 ## Architecture
