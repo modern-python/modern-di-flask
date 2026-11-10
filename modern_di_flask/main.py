@@ -36,7 +36,7 @@ def _fetch_child_container() -> Container:
 
 
 def _request_child_container() -> Container:
-    connection = flask.request._get_current_object()  # noqa: SLF001  # ty: ignore[unresolved-attribute]
+    connection = flask.request._get_current_object()  # noqa: SLF001  # ty: ignore[missing-attribute]
     if getattr(g, _CHILD_REQUEST_ATTR, None) is connection:
         return typing.cast(Container, getattr(g, _CHILD_CONTAINER_ATTR))
     try:
